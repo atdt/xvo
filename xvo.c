@@ -6,7 +6,7 @@
 
 #define MAX_VARY_OPTS 32
 
-struct tagbstring COMMA = bsStatic(",");
+struct tagbstring COMMA = bsStatic(", ");
 struct tagbstring SEP = bsStatic(",;");
 struct tagbstring STRING_CONTAINS = bsStatic("string-contains");
 struct tagbstring LIST_CONTAINS = bsStatic("list-contains");
@@ -56,7 +56,7 @@ bstrVarnishHeader(const_bstring hdrname) {
 
     hdrfmt = bformat("%c%s:", hdrname->slen + 1, hdrname);
     /* btfromcstr(&bhdrval, VRT_GetHdr(sp, HDR_OBJ, hdrfmt->data)); */
-    btfromcstr(hdrval, "x_sessionasdfUserID=123");
+    btfromcstr(hdrval, "gzip, x_sessionasdfUserID=123");
     bdestroy(hdrfmt);
     return hdrval;
 }
@@ -108,15 +108,14 @@ bstrListAdd(struct bstrList *sl, const_bstring str) {
 }
 
 static bstring
-formatVaryOpt(const_bstring header, Parameter *param) {
-    return bformat("%s; %s=%s", header->data, param->attr->data, param->val->data);
+formatVaryOpt(const_bstring header, Parameter *param, char *value) {
+    return bformat("%s; %s-%s=%s", header->data, param->attr->data, param->val->data, value);
 }
 
 static int
 cmpVaryOpts(const void *a, const void *b) {
     return bstricmp(a, b);
 }
-
 
 
 int main(void) {
@@ -154,6 +153,7 @@ int main(void) {
         }
 
         header = conds->entry[0];
+        btrimws(header);
         /* bstring hdrVal = bstrVarnishHeader(sp, conds->entry[0]); */
         hdrVal = bstrVarnishHeader(conds->entry[0]);
         hparams = bsplits(&hdrVal, &SEP);
@@ -162,17 +162,13 @@ int main(void) {
             vo = parameterCreate(conds->entry[j]);
 
             if (bstricmp(vo->attr, &STRING_CONTAINS) == 0) {
-                if (hdrStringContains(&hdrVal, vo->val)) {
-                    opt = formatVaryOpt(header, vo);
-                    bstrListAdd(varied, opt);
-                    bdestroy(opt);
-                }
+                opt = formatVaryOpt(header, vo, hdrStringContains(&hdrVal, vo->val) ? "1" : "0");
+                bstrListAdd(varied, opt);
+                bdestroy(opt);
             } else if (bstricmp(vo->attr, &LIST_CONTAINS) == 0) {
-                if (hdrListContains(hparams, vo->val)) {
-                    opt = formatVaryOpt(header, vo);
-                    bstrListAdd(varied, opt);
-                    bdestroy(opt);
-                }
+                opt = formatVaryOpt(header, vo, hdrListContains(hparams, vo->val) ? "1" : "0");
+                bstrListAdd(varied, opt);
+                bdestroy(opt);
             }
             parameterDestroy(vo);
         }
